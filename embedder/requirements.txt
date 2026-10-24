@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+sentence-transformers
+psycopg[binary]
+neo4j
+bcrypt
+python-dotenv
+numpy
