@@ -245,6 +245,24 @@ BEGIN
     RETURN new_id;  -- any exception above rolls back the whole function
 END $$ LANGUAGE plpgsql;
 
+-- Transactional procedure: delete a paper and report what the cascade removed
+CREATE OR REPLACE FUNCTION fn_delete_paper(pid INT)
+RETURNS TABLE (deleted_paper_id INT, removed_citations INT, removed_authorships INT) AS $$
+DECLARE v_citations INT; v_authors INT;
+BEGIN
+    PERFORM 1 FROM paper WHERE paper_id = pid FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Paper % not found', pid USING ERRCODE = 'P0002';
+    END IF;
+
+    SELECT count(*)::int INTO v_citations FROM citation
+     WHERE citing_paper_id = pid OR cited_paper_id = pid;
+    SELECT count(*)::int INTO v_authors FROM publication WHERE paper_id = pid;
+
+    DELETE FROM paper WHERE paper_id = pid;  -- FKs + triggers cascade and audit
+    RETURN QUERY SELECT pid, v_citations, v_authors;
+END $$ LANGUAGE plpgsql;
+
 -- Influence score: citations weighted by the rank of the venue
 CREATE OR REPLACE FUNCTION fn_influence_score(pid INT) RETURNS NUMERIC AS $$
     SELECT ROUND(p.citation_count *

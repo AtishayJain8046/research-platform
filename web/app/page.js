@@ -1,10 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useApi } from "./components/useApi";
+import { useMe } from "./components/useMe";
+import DeletePaperButton from "./components/DeletePaperButton";
 
 export default function Dashboard() {
-  const { data: d, error } = useApi("/api/dashboard");
+  const { data: d, error, refetch } = useApi("/api/dashboard");
   const { data: audit } = useApi("/api/audit");
+  const { me } = useMe();
   if (error) return <p className="err">{error}</p>;
   if (!d) return <p>Loading…</p>;
   const max = Math.max(...d.byYear.map((y) => y.papers));
@@ -13,8 +16,9 @@ export default function Dashboard() {
       {Object.entries(d.totals).map(([k, v]) => <div className="card" key={k}><div className="muted">{k}</div><div className="stat">{v}</div></div>)}
     </div>
     <div className="card"><h3>Most influential papers (venue-weighted citations)</h3>
-      <table><thead><tr><th>Title</th><th>Year</th><th>Citations</th><th>Influence</th></tr></thead><tbody>
-        {d.topPapers.map((p) => <tr key={p.paper_id}><td><Link href={`/papers/${p.paper_id}`}>{p.title}</Link></td><td>{p.pub_year}</td><td>{p.citation_count}</td><td>{p.influence}</td></tr>)}
+      <table><thead><tr><th>Title</th><th>Year</th><th>Citations</th><th>Influence</th>{me?.role === "admin" && <th />}</tr></thead><tbody>
+        {d.topPapers.map((p) => <tr key={p.paper_id}><td><Link href={`/papers/${p.paper_id}`}>{p.title}</Link></td><td>{p.pub_year}</td><td>{p.citation_count}</td><td>{p.influence}</td>
+          {me?.role === "admin" && <td><DeletePaperButton compact paperId={p.paper_id} title={p.title} onDeleted={refetch} /></td>}</tr>)}
       </tbody></table></div>
     <div className="card"><h3>Papers per year</h3>
       {d.byYear.map((y) => <div key={y.pub_year} style={{ display: "flex", gap: 8, alignItems: "center" }}>
