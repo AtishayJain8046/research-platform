@@ -34,7 +34,26 @@ export async function PUT(req, { params }) {
 export async function DELETE(_req, { params }) {
   const u = await requireRole(["admin"]); if (u instanceof Response) return u;
   const id = Number((await params).id);
-  await q("DELETE FROM paper WHERE paper_id=$1", [id]);
-  await cypher("MATCH (p:Paper {paper_id:$id}) DETACH DELETE p", { id });
-  return Response.json({ ok: true });
+  if (!Number.isInteger(id) || id <= 0)
+    return Response.json({ error: "Invalid paper id" }, { status: 400 });
+
+  let summary;
+  try {
+    [summary] = await q("SELECT * FROM fn_delete_paper($1)", [id]);
+  } catch (e) {
+    if (e.code === "P0002") return Response.json({ error: "Paper not found" }, { status: 404 });
+    return Response.json({ error: e.message }, { status: 400 });
+  }
+
+  // Postgres is the source of truth; the graph is a derived copy. A failed
+  // sync must not fail the request, only be reported.
+  let graphSynced = true;
+  try {
+    await cypher("MATCH (p:Paper {paper_id:$id}) DETACH DELETE p", { id });
+  } catch (e) {
+    graphSynced = false;
+    console.error(`Neo4j delete failed for paper ${id} (SQL already committed)`, e);
+  }
+
+  return Response.json({ ok: true, graphSynced, ...summary });
 }
